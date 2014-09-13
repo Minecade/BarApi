@@ -22,12 +22,12 @@ public class v1_6 extends FakeDragon {
 	private static final Integer EntityID = 6000;
 
 	public v1_6(String name, Location loc) {
-		super(name, loc);
+		super(name, loc, false);
 	}
 
 	@SuppressWarnings("deprecation")
 	@Override
-	public Object getSpawnPacket() {
+	public Object getSpawnPacket(boolean new_version) {
 		Class<?> mob_class = Util.getCraftClass("Packet24MobSpawn");
 		Object mobPacket = null;
 		try {

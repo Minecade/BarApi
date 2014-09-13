@@ -21,15 +21,15 @@ public class v1_7 extends FakeDragon {
 	private Object dragon;
 	private int id;
 
-	public v1_7(String name, Location loc) {
-		super(name, loc);
+	public v1_7(String name, Location loc, boolean wither) {
+		super(name, loc, wither);
 	}
 
 	@Override
-	public Object getSpawnPacket() {
+	public Object getSpawnPacket(boolean new_version) {
 		Class<?> Entity = Util.getCraftClass("Entity");
 		Class<?> EntityLiving = Util.getCraftClass("EntityLiving");
-		Class<?> EntityEnderDragon = Util.getCraftClass("EntityEnderDragon");
+		Class<?> EntityEnderDragon = Util.getCraftClass(new_version ? "EntityWither" : "EntityEnderDragon");
 		Object packet = null;
 		try {
 			dragon = EntityEnderDragon.getConstructor(Util.getCraftClass("World")).newInstance(getWorld());
@@ -136,7 +136,7 @@ public class v1_7 extends FakeDragon {
 		Object packet = null;
 
 		try {
-			packet = PacketPlayOutEntityTeleport.getConstructor(new Class<?>[] { int.class, int.class, int.class, int.class, byte.class, byte.class }).newInstance(this.id, loc.getBlockX() * 32, loc.getBlockY() * 32, loc.getBlockZ() * 32, (byte) ((int) loc.getYaw() * 256 / 360), (byte) ((int) loc.getPitch() * 256 / 360));
+			packet = PacketPlayOutEntityTeleport.getConstructor(new Class<?>[] { int.class, int.class, int.class, int.class, byte.class, byte.class, boolean.class }).newInstance(this.id, loc.getBlockX() * 32, loc.getBlockY() * 32, loc.getBlockZ() * 32, (byte) ((int) loc.getYaw() * 256 / 360), (byte) ((int) loc.getPitch() * 256 / 360), false);
 		} catch (IllegalArgumentException e) {
 			e.printStackTrace();
 		} catch (SecurityException e) {

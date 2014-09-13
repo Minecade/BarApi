@@ -40,11 +40,11 @@ public class Util {
 		version = mcVersion + ".";
 	}
 
-	public static FakeDragon newDragon(String message, Location loc) {
+	public static FakeDragon newDragon(String message, Location loc, boolean wither) {
 		FakeDragon fakeDragon = null;
 
 		try {
-			fakeDragon = (FakeDragon) fakeDragonClass.getConstructor(String.class, Location.class).newInstance(message, loc);
+			fakeDragon = (FakeDragon) fakeDragonClass.getConstructor(String.class, Location.class, boolean.class).newInstance(message, loc, wither);
 		} catch (IllegalArgumentException e) {
 			e.printStackTrace();
 		} catch (SecurityException e) {
