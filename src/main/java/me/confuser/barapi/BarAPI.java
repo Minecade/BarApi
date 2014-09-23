@@ -37,17 +37,11 @@ public class BarAPI extends JavaPlugin implements Listener {
     private static HashMap<UUID, Integer> timers = new HashMap<UUID, Integer>();
     private static Set<String> new_protocols = new HashSet<String>();
     private static BarAPI plugin;
-    static HashSet<Byte> blocks = new HashSet<>();
+    static HashSet<Byte> blocks = new HashSet<Byte>();
 
     public void onEnable() {
         getConfig().options().copyDefaults(true);
         saveConfig();
-
-        /*
-         * if (getConfig().getBoolean("autoUpdate")) //new Updater(this, 64876, getFile(), Updater.UpdateType.DEFAULT, false);
-         * 
-         * try { MetricsLite metrics = new MetricsLite(this); metrics.start(); } catch (IOException e) { // Failed to submit the stats :-( }
-         */
 
         getServer().getPluginManager().registerEvents(this, this);
 
