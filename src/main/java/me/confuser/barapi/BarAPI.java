@@ -1,8 +1,6 @@
 package me.confuser.barapi;
 
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.UUID;
 
 import me.confuser.barapi.nms.FakeDragon;
@@ -11,20 +9,17 @@ import org.apache.commons.lang.Validate;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.craftbukkit.v1_7_R4.entity.CraftPlayer;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerKickEvent;
-import org.bukkit.event.player.PlayerLoginEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
 
 /**
  * Allows plugins to safely set a health bar message.
@@ -33,448 +28,468 @@ import org.bukkit.scheduler.BukkitRunnable;
  */
 
 public class BarAPI extends JavaPlugin implements Listener {
-    private static HashMap<UUID, FakeDragon> players = new HashMap<UUID, FakeDragon>();
-    private static HashMap<UUID, Integer> timers = new HashMap<UUID, Integer>();
-    private static Set<String> new_protocols = new HashSet<String>();
-    private static BarAPI plugin;
-    static HashSet<Byte> blocks = new HashSet<Byte>();
+	private static HashMap<UUID, FakeDragon> players = new HashMap<UUID, FakeDragon>();
+	private static HashMap<UUID, Integer> timers = new HashMap<UUID, Integer>();
 
-    public void onEnable() {
-        getConfig().options().copyDefaults(true);
-        saveConfig();
+	private static BarAPI plugin;
+	
+	private static boolean useSpigotHack = false;
 
-        getServer().getPluginManager().registerEvents(this, this);
+	public void onEnable() {
+		getConfig().options().copyDefaults(true);
+		saveConfig();
+		
+//		if (getConfig().getBoolean("autoUpdate"))
+//			new Updater(this, 64876, getFile(), Updater.UpdateType.DEFAULT, false);
+//		
+//		try {
+//		    MetricsLite metrics = new MetricsLite(this);
+//		    metrics.start();
+//		} catch (IOException e) {
+//		    // Failed to submit the stats :-(
+//		}
+		
+		getServer().getPluginManager().registerEvents(this, this);
 
-        getLogger().info("Loaded");
+		getLogger().info("Loaded");
 
-        plugin = this;
+		plugin = this;
 
-        // TestMode
-        if (getConfig().getBoolean("testMode")) {
-            plugin.getServer().getScheduler().runTaskTimer(plugin, new Runnable() {
+		// TestMode
+		if (getConfig().getBoolean("testMode")) {
+			plugin.getServer().getScheduler().runTaskTimer(plugin, new Runnable() {
+	
+				@Override
+				public void run() {
+					for (Player player : plugin.getServer().getOnlinePlayers()) {
+						BarAPI.setMessage(player, ChatColor.AQUA + "Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI", 10);
+					}
+				}
+	
+			}, 30L, 300L);
+		}
+		
+		useSpigotHack = getConfig().getBoolean("useSpigotHack", false);
+		
+		if (useSpigotHack) {
+			getServer().getScheduler().scheduleSyncRepeatingTask(this, new Runnable() {
+				public void run() {
+					for (UUID uuid : players.keySet()) {
+						Player p = Bukkit.getPlayer(uuid);
+						Util.sendPacket(p, players.get(uuid).getTeleportPacket(getDragonLocation(p.getLocation())));
+					}
+				}
+			}, 0L, 5L);
+		}
+	}
+	
+	public void onDisable() {
+		for (Player player : plugin.getServer().getOnlinePlayers()) {
+			quit(player);
+		}
 
-                @Override
-                public void run() {
-                    for (Player player : plugin.getServer().getOnlinePlayers()) {
-                        BarAPI.setMessage(player, ChatColor.AQUA
-                                + "Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI", 10);
-                    }
-                }
+		players.clear();
+		
+		for (int timerID : timers.values()) {
+			Bukkit.getScheduler().cancelTask(timerID);
+		}
+		
+		timers.clear();
+	}
 
-            }, 30L, 300L);
-        }
-        for (Material m : Material.values()) {
-            blocks.add((byte) m.getId());
-        }
-    }
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void PlayerLoggout(PlayerQuitEvent event) {
+		quit(event.getPlayer());
+	}
 
-    public void onDisable() {
-        for (Player player : plugin.getServer().getOnlinePlayers()) {
-            quit(player);
-        }
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onPlayerKick(PlayerKickEvent event) {
+		quit(event.getPlayer());
+	}
 
-        players.clear();
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onPlayerTeleport(final PlayerTeleportEvent event) {
+		handleTeleport(event.getPlayer(), event.getTo().clone());
+	}
 
-        for (int timerID : timers.values()) {
-            Bukkit.getScheduler().cancelTask(timerID);
-        }
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onPlayerTeleport(final PlayerRespawnEvent event) {
+		handleTeleport(event.getPlayer(), event.getRespawnLocation().clone());
+	}
 
-        timers.clear();
-    }
+	private void handleTeleport(final Player player, final Location loc) {
 
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onPlayerLogin(final PlayerLoginEvent e) {
-        new BukkitRunnable() {
-            public void run() {
-                if (((CraftPlayer) e.getPlayer()).getHandle().playerConnection.networkManager.getVersion() >= 47) {
-                    new_protocols.add(e.getPlayer().getName());
-                }
-            }
-            // Check back 2 ticks later so their data is all there..
-        }.runTaskLater(this, 2);
-    }
+		if (!hasBar(player))
+			return;
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void PlayerLoggout(PlayerQuitEvent event) {
-        quit(event.getPlayer());
-        new_protocols.remove(event.getPlayer().getName());
-    }
+		Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPlayerKick(PlayerKickEvent event) {
-        quit(event.getPlayer());
-    }
+			@Override
+			public void run() {
+				// Check if the player still has a dragon after the two ticks! ;)
+				if (!hasBar(player))
+					return;
+				
+				FakeDragon oldDragon = getDragon(player, "");
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPlayerTeleport(final PlayerTeleportEvent event) {
-        handleTeleport(event.getPlayer(), event.getTo().clone());
-    }
+				float health = oldDragon.health;
+				String message = oldDragon.name;
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPlayerTeleport(final PlayerRespawnEvent event) {
-        handleTeleport(event.getPlayer(), event.getRespawnLocation().clone());
-    }
+				Util.sendPacket(player, getDragon(player, "").getDestroyPacket());
 
-    private void handleTeleport(final Player player, final Location loc) {
+				players.remove(player.getUniqueId());
 
-        if (!hasBar(player))
-            return;
+				FakeDragon dragon = addDragon(player, loc, message);
+				dragon.health = health;
 
-        Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
+				sendDragon(dragon, player);
+			}
 
-            @Override
-            public void run() {
-                // Check if the player still has a dragon after the two ticks! ;)
-                if (!hasBar(player))
-                    return;
+		}, 2L);
+	}
 
-                FakeDragon oldDragon = getDragon(player, "");
+	private void quit(Player player) {
+		removeBar(player);
+	}
+	
+	public static boolean useSpigotHack() {
+		return useSpigotHack;
+	}
+	
+	/**
+	 * Set a message for all players.<br>
+	 * It will remain there until the player logs off or another plugin overrides it.<br>
+	 * This method will show a full health bar and will cancel any running timers.
+	 * 
+	 * @param message
+	 *            The message shown.<br>
+	 *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
+	 *            It will be cut to that size automatically.
+	 * @see BarAPI#setMessage(player, message)
+	 */
+	public static void setMessage(String message) {
+		for (Player player : Bukkit.getOnlinePlayers()) {
+			setMessage(player, message);
+		}
+	}
 
-                float health = oldDragon.health;
-                String message = oldDragon.name;
+	/**
+	 * Set a message for the given player.<br>
+	 * It will remain there until the player logs off or another plugin overrides it.<br>
+	 * This method will show a full health bar and will cancel any running timers.
+	 * 
+	 * @param player
+	 *            The player who should see the given message.
+	 * @param message
+	 *            The message shown to the player.<br>
+	 *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
+	 *            It will be cut to that size automatically.
+	 */
+	public static void setMessage(Player player, String message) {
+		FakeDragon dragon = getDragon(player, message);
 
-                Util.sendPacket(player, getDragon(player, "").getDestroyPacket());
+		dragon.name = cleanMessage(message);
+		dragon.health = dragon.getMaxHealth();
 
-                players.remove(player.getUniqueId());
+		cancelTimer(player);
 
-                FakeDragon dragon = addDragon(player, loc, message);
-                dragon.health = health;
+		sendDragon(dragon, player);
+	}
+	
+	/**
+	 * Set a message for all players.<br>
+	 * It will remain there for each player until the player logs off or another plugin overrides it.<br>
+	 * This method will show a health bar using the given percentage value and will cancel any running timers.
+	 * 
+	 * @param message
+	 *            The message shown to the player.<br>
+	 *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
+	 *            It will be cut to that size automatically.
+	 * @param percent
+	 *            The percentage of the health bar filled.<br>
+	 *            This value must be between 0F (inclusive) and 100F (inclusive).
+	 * @throws IllegalArgumentException
+	 *             If the percentage is not within valid bounds.
+	 * @see BarAPI#setMessage(player, message, percent)
+	 */
+	public static void setMessage(String message, float percent) {
+		for (Player player : Bukkit.getOnlinePlayers()) {
+			setMessage(player, message, percent);
+		}
+	}
 
-                sendDragon(dragon, player);
-            }
+	/**
+	 * Set a message for the given player.<br>
+	 * It will remain there until the player logs off or another plugin overrides it.<br>
+	 * This method will show a health bar using the given percentage value and will cancel any running timers.
+	 * 
+	 * @param player
+	 *            The player who should see the given message.
+	 * @param message
+	 *            The message shown to the player.<br>
+	 *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
+	 *            It will be cut to that size automatically.
+	 * @param percent
+	 *            The percentage of the health bar filled.<br>
+	 *            This value must be between 0F (inclusive) and 100F (inclusive).
+	 * @throws IllegalArgumentException
+	 *             If the percentage is not within valid bounds.
+	 */
+	public static void setMessage(Player player, String message, float percent) {
+		Validate.isTrue(0F <= percent && percent <= 100F, "Percent must be between 0F and 100F, but was: ", percent);
+		
+		FakeDragon dragon = getDragon(player, message);
 
-        }, 2L);
-    }
+		dragon.name = cleanMessage(message);
+		dragon.health = (percent / 100f) * dragon.getMaxHealth();
 
-    private void quit(Player player) {
-        removeBar(player);
-    }
+		cancelTimer(player);
 
-    /**
-     * Set a message for all players.<br>
-     * It will remain there until the player logs off or another plugin overrides it.<br>
-     * This method will show a full health bar and will cancel any running timers.
-     * 
-     * @param message
-     *            The message shown.<br>
-     *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
-     *            It will be cut to that size automatically.
-     * @see BarAPI#setMessage(player, message)
-     */
-    public static void setMessage(String message) {
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            setMessage(player, message);
-        }
-    }
+		sendDragon(dragon, player);
+	}
+	
+	/**
+	 * Set a message for all players.<br>
+	 * It will remain there for each player until the player logs off or another plugin overrides it.<br>
+	 * This method will use the health bar as a decreasing timer, all previously started timers will be cancelled.<br>
+	 * The timer starts with a full bar.<br>
+	 * The health bar will be removed automatically if it hits zero.
+	 * 
+	 * @param message
+	 *            The message shown.<br>
+	 *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
+	 *            It will be cut to that size automatically.
+	 * @param seconds
+	 *            The amount of seconds displayed by the timer.<br>
+	 *            Supports values above 1 (inclusive).
+	 * @throws IllegalArgumentException
+	 *             If seconds is zero or below.
+	 * @see BarAPI#setMessage(player, message, seconds)
+	 */
+	public static void setMessage(String message, int seconds) {
+		for (Player player : Bukkit.getOnlinePlayers()) {
+			setMessage(player, message, seconds);
+		}
+	}
 
-    /**
-     * Set a message for the given player.<br>
-     * It will remain there until the player logs off or another plugin overrides it.<br>
-     * This method will show a full health bar and will cancel any running timers.
-     * 
-     * @param player
-     *            The player who should see the given message.
-     * @param message
-     *            The message shown to the player.<br>
-     *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
-     *            It will be cut to that size automatically.
-     */
-    public static void setMessage(Player player, String message) {
-        FakeDragon dragon = getDragon(player, message);
+	/**
+	 * Set a message for the given player.<br>
+	 * It will remain there until the player logs off or another plugin overrides it.<br>
+	 * This method will use the health bar as a decreasing timer, all previously started timers will be cancelled.<br>
+	 * The timer starts with a full bar.<br>
+	 * The health bar will be removed automatically if it hits zero.
+	 * 
+	 * @param player
+	 *            The player who should see the given timer/message.
+	 * @param message
+	 *            The message shown to the player.<br>
+	 *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
+	 *            It will be cut to that size automatically.
+	 * @param seconds
+	 *            The amount of seconds displayed by the timer.<br>
+	 *            Supports values above 1 (inclusive).
+	 * @throws IllegalArgumentException
+	 *             If seconds is zero or below.
+	 */
+	public static void setMessage(final Player player, String message, int seconds) {
+		Validate.isTrue(seconds > 0, "Seconds must be above 1 but was: ", seconds);
+		
+		FakeDragon dragon = getDragon(player, message);
 
-        dragon.name = cleanMessage(message);
-        dragon.health = FakeDragon.MAX_HEALTH;
+		dragon.name = cleanMessage(message);
+		dragon.health = dragon.getMaxHealth();
 
-        cancelTimer(player);
+		final float dragonHealthMinus = dragon.getMaxHealth() / seconds;
 
-        sendDragon(dragon, player);
-    }
+		cancelTimer(player);
 
-    /**
-     * Set a message for all players.<br>
-     * It will remain there for each player until the player logs off or another plugin overrides it.<br>
-     * This method will show a health bar using the given percentage value and will cancel any running timers.
-     * 
-     * @param message
-     *            The message shown to the player.<br>
-     *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
-     *            It will be cut to that size automatically.
-     * @param percent
-     *            The percentage of the health bar filled.<br>
-     *            This value must be between 0F (inclusive) and 100F (inclusive).
-     * @throws IllegalArgumentException
-     *             If the percentage is not within valid bounds.
-     * @see BarAPI#setMessage(player, message, percent)
-     */
-    public static void setMessage(String message, float percent) {
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            setMessage(player, message, percent);
-        }
-    }
+		timers.put(player.getUniqueId(), Bukkit.getScheduler().runTaskTimer(plugin, new Runnable() {
 
-    @EventHandler
-    public void onPlayerMove(PlayerMoveEvent e) {
-        // Dont check them
-        if (!hasBar(e.getPlayer()))
-            return;
-        // Dont bother
-        if (!new_protocols.contains(e.getPlayer().getName()))
-            return;
-        if (e.getFrom().getYaw() != e.getTo().getYaw() || e.getFrom().getPitch() != e.getTo().getPitch()) {
-            FakeDragon dragon = getDragon(e.getPlayer(), "TESTING");
-            // Get the last block of their view
-            Location block_looking = e.getPlayer().getLastTwoTargetBlocks(blocks, 100).get(0).getLocation();
-            Util.sendPacket(e.getPlayer(), dragon.getTeleportPacket(block_looking));
-        }
-    }
+			@Override
+			public void run() {
+				FakeDragon drag = getDragon(player, "");
+				drag.health -= dragonHealthMinus;
 
-    /**
-     * Set a message for the given player.<br>
-     * It will remain there until the player logs off or another plugin overrides it.<br>
-     * This method will show a health bar using the given percentage value and will cancel any running timers.
-     * 
-     * @param player
-     *            The player who should see the given message.
-     * @param message
-     *            The message shown to the player.<br>
-     *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
-     *            It will be cut to that size automatically.
-     * @param percent
-     *            The percentage of the health bar filled.<br>
-     *            This value must be between 0F (inclusive) and 100F (inclusive).
-     * @throws IllegalArgumentException
-     *             If the percentage is not within valid bounds.
-     */
-    public static void setMessage(Player player, String message, float percent) {
-        Validate.isTrue(0F <= percent && percent <= 100F, "Percent must be between 0F and 100F, but was: ", percent);
+				if (drag.health <= 1) {
+					removeBar(player);
+					cancelTimer(player);
+				} else {
+					sendDragon(drag, player);
+				}
+			}
 
-        FakeDragon dragon = getDragon(player, message);
+		}, 20L, 20L).getTaskId());
 
-        dragon.name = cleanMessage(message);
-        if (hasNew(player)) {
-            if (percent < 51) {
-                // They can see the wither when its health drops below this percentage
-                percent = 51;
-            }
-        }
-        dragon.health = (percent / 100f) * FakeDragon.MAX_HEALTH;
-        cancelTimer(player);
+		sendDragon(dragon, player);
+	}
 
-        sendDragon(dragon, player);
-    }
+	/**
+	 * Checks whether the given player has a bar.
+	 * 
+	 * @param player
+	 *            The player who should be checked.
+	 * @return True, if the player has a bar, False otherwise.
+	 */
+	public static boolean hasBar(Player player) {
+		return players.get(player.getUniqueId()) != null;
+	}
 
-    /**
-     * Set a message for all players.<br>
-     * It will remain there for each player until the player logs off or another plugin overrides it.<br>
-     * This method will use the health bar as a decreasing timer, all previously started timers will be cancelled.<br>
-     * The timer starts with a full bar.<br>
-     * The health bar will be removed automatically if it hits zero.
-     * 
-     * @param message
-     *            The message shown.<br>
-     *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
-     *            It will be cut to that size automatically.
-     * @param seconds
-     *            The amount of seconds displayed by the timer.<br>
-     *            Supports values above 1 (inclusive).
-     * @throws IllegalArgumentException
-     *             If seconds is zero or below.
-     * @see BarAPI#setMessage(player, message, seconds)
-     */
-    public static void setMessage(String message, int seconds) {
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            setMessage(player, message, seconds);
-        }
-    }
+	/**
+	 * Removes the bar from the given player.<br>
+	 * If the player has no bar, this method does nothing.
+	 * 
+	 * @param player
+	 *            The player whose bar should be removed.
+	 */
+	public static void removeBar(Player player) {
+		if (!hasBar(player))
+			return;
 
-    /**
-     * Set a message for the given player.<br>
-     * It will remain there until the player logs off or another plugin overrides it.<br>
-     * This method will use the health bar as a decreasing timer, all previously started timers will be cancelled.<br>
-     * The timer starts with a full bar.<br>
-     * The health bar will be removed automatically if it hits zero.
-     * 
-     * @param player
-     *            The player who should see the given timer/message.
-     * @param message
-     *            The message shown to the player.<br>
-     *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
-     *            It will be cut to that size automatically.
-     * @param seconds
-     *            The amount of seconds displayed by the timer.<br>
-     *            Supports values above 1 (inclusive).
-     * @throws IllegalArgumentException
-     *             If seconds is zero or below.
-     */
-    public static void setMessage(final Player player, String message, int seconds) {
-        Validate.isTrue(seconds > 0, "Seconds must be above 1 but was: ", seconds);
+		Util.sendPacket(player, getDragon(player, "").getDestroyPacket());
 
-        FakeDragon dragon = getDragon(player, message);
+		players.remove(player.getUniqueId());
 
-        dragon.name = cleanMessage(message);
-        dragon.health = FakeDragon.MAX_HEALTH;
+		cancelTimer(player);
+	}
 
-        final float dragonHealthMinus = FakeDragon.MAX_HEALTH / seconds;
+	/**
+	 * Modifies the health of an existing bar.<br>
+	 * If the player has no bar, this method does nothing.
+	 * 
+	 * @param player
+	 *            The player whose bar should be modified.
+	 * @param percent
+	 *            The percentage of the health bar filled.<br>
+	 *            This value must be between 0F and 100F (inclusive).
+	 */
+	public static void setHealth(Player player, float percent) {
+		if (!hasBar(player))
+			return;
 
-        cancelTimer(player);
+		FakeDragon dragon = getDragon(player, "");
+		dragon.health = (percent / 100f) * dragon.getMaxHealth();
 
-        timers.put(player.getUniqueId(), Bukkit.getScheduler().runTaskTimer(plugin, new Runnable() {
+		cancelTimer(player);
+		
+		if (percent == 0) {
+			removeBar(player);
+		} else {
+			sendDragon(dragon, player);
+		}
+	}
 
-            @Override
-            public void run() {
-                FakeDragon drag = getDragon(player, "");
-                drag.health -= dragonHealthMinus;
+	/**
+	 * Get the health of an existing bar.
+	 * 
+	 * @param player
+	 *            The player whose bar's health should be returned.
+	 * @return The current absolute health of the bar.<br>
+	 *         If the player has no bar, this method returns -1.
+	 */
+	public static float getHealth(Player player) {
+		if (!hasBar(player))
+			return -1;
 
-                if (drag.health <= 1) {
-                    removeBar(player);
-                    cancelTimer(player);
-                } else {
-                    sendDragon(drag, player);
-                }
-            }
+		return getDragon(player, "").health;
+	}
 
-        }, 20L, 20L).getTaskId());
+	/**
+	 * Get the message of an existing bar.
+	 * 
+	 * @param player
+	 *            The player whose bar's message should be returned.
+	 * @return The current message displayed to the player.<br>
+	 *         If the player has no bar, this method returns an empty string.
+	 */
+	public static String getMessage(Player player) {
+		if (!hasBar(player))
+			return "";
 
-        sendDragon(dragon, player);
-    }
+		return getDragon(player, "").name;
+	}
 
-    /**
-     * Checks whether the given player has a bar.
-     * 
-     * @param player
-     *            The player who should be checked.
-     * @return True, if the player has a bar, False otherwise.
-     */
-    public static boolean hasBar(Player player) {
-        return players.get(player.getUniqueId()) != null;
-    }
+	private static String cleanMessage(String message) {
+		if (message.length() > 64)
+			message = message.substring(0, 63);
 
-    /**
-     * Removes the bar from the given player.<br>
-     * If the player has no bar, this method does nothing.
-     * 
-     * @param player
-     *            The player whose bar should be removed.
-     */
-    public static void removeBar(Player player) {
-        if (!hasBar(player))
-            return;
+		return message;
+	}
 
-        Util.sendPacket(player, getDragon(player, "").getDestroyPacket());
+	private static void cancelTimer(Player player) {
+		Integer timerID = timers.remove(player.getUniqueId());
 
-        players.remove(player.getUniqueId());
+		if (timerID != null) {
+			Bukkit.getScheduler().cancelTask(timerID);
+		}
+	}
 
-        cancelTimer(player);
-    }
+	private static void sendDragon(FakeDragon dragon, Player player) {
+		Util.sendPacket(player, dragon.getMetaPacket(dragon.getWatcher()));
+		Util.sendPacket(player, dragon.getTeleportPacket(getDragonLocation(player.getLocation())));
+	}
 
-    /**
-     * Modifies the health of an existing bar.<br>
-     * If the player has no bar, this method does nothing.
-     * 
-     * @param player
-     *            The player whose bar should be modified.
-     * @param percent
-     *            The percentage of the health bar filled.<br>
-     *            This value must be between 0F and 100F (inclusive).
-     */
-    public static void setHealth(Player player, float percent) {
-        if (!hasBar(player))
-            return;
+	private static FakeDragon getDragon(Player player, String message) {
+		if (hasBar(player)) {
+			return players.get(player.getUniqueId());
+		} else
+			return addDragon(player, cleanMessage(message));
+	}
 
-        FakeDragon dragon = getDragon(player, "");
-        dragon.health = (percent / 100f) * FakeDragon.MAX_HEALTH;
+	private static FakeDragon addDragon(Player player, String message) {
+		FakeDragon dragon = Util.newDragon(message, getDragonLocation(player.getLocation()));
 
-        cancelTimer(player);
+		Util.sendPacket(player, dragon.getSpawnPacket());
 
-        if (percent == 0) {
-            removeBar(player);
+		players.put(player.getUniqueId(), dragon);
+
+		return dragon;
+	}
+
+	private static FakeDragon addDragon(Player player, Location loc, String message) {
+		FakeDragon dragon = Util.newDragon(message, getDragonLocation(loc));
+
+		Util.sendPacket(player, dragon.getSpawnPacket());
+
+		players.put(player.getUniqueId(), dragon);
+
+		return dragon;
+	}
+	
+	private static Location getDragonLocation(Location loc) {
+		if (!useSpigotHack()) {
+			loc.subtract(0, 300, 0);
+			return loc;
+		}
+
+		float pitch = loc.getPitch();
+		
+		if (pitch >= 55) {
+			loc.add(0, -300, 0);
+		} else if (pitch <= -55) {
+			loc.add(0, 300, 0);
         } else {
-            sendDragon(dragon, player);
+            BlockFace face = getDirection(loc);
+            if (null != face) {
+                Block relative = loc.getBlock().getRelative(face, plugin.getServer().getViewDistance() * 16);
+                if (null != relative) {
+                    loc = relative.getLocation();
+                }
+            }
         }
-    }
 
-    /**
-     * Get the health of an existing bar.
-     * 
-     * @param player
-     *            The player whose bar's health should be returned.
-     * @return The current absolute health of the bar.<br>
-     *         If the player has no bar, this method returns -1.
-     */
-    public static float getHealth(Player player) {
-        if (!hasBar(player))
-            return -1;
+		return loc;
+	}
 
-        return getDragon(player, "").health;
-    }
-
-    /**
-     * Get the message of an existing bar.
-     * 
-     * @param player
-     *            The player whose bar's message should be returned.
-     * @return The current message displayed to the player.<br>
-     *         If the player has no bar, this method returns an empty string.
-     */
-    public static String getMessage(Player player) {
-        if (!hasBar(player))
-            return "";
-
-        return getDragon(player, "").name;
-    }
-
-    private static String cleanMessage(String message) {
-        if (message.length() > 64)
-            message = message.substring(0, 63);
-
-        return message;
-    }
-
-    private static void cancelTimer(Player player) {
-        Integer timerID = timers.remove(player.getUniqueId());
-
-        if (timerID != null) {
-            Bukkit.getScheduler().cancelTask(timerID);
-        }
-    }
-
-    public static boolean hasNew(Player p) {
-        return ((CraftPlayer) p).getHandle().playerConnection.networkManager.getVersion() >= 47;
-    }
-
-    private static void sendDragon(FakeDragon dragon, Player player) {
-        Util.sendPacket(player, dragon.getMetaPacket(dragon.getWatcher()));
-        if (((CraftPlayer) player).getHandle().playerConnection.networkManager.getVersion() < 47) {
-            Util.sendPacket(player, dragon.getTeleportPacket(player.getLocation().add(0, -300, 0)));
-        } else {
-            Util.sendPacket(player, dragon.getTeleportPacket(player.getLastTwoTargetBlocks(blocks, 100).get(0).getLocation()));
-        }
-    }
-
-    private static FakeDragon getDragon(Player player, String message) {
-        if (hasBar(player)) {
-            return players.get(player.getUniqueId());
-        } else
-            return addDragon(player, cleanMessage(message));
-    }
-
-    private static FakeDragon addDragon(Player player, String message) {
-        FakeDragon dragon = Util.newDragon(message, player.getLocation().add(0, -300, 0), hasNew(player));
-
-        Util.sendPacket(player, dragon.getSpawnPacket(hasNew(player)));
-
-        players.put(player.getUniqueId(), dragon);
-
-        return dragon;
-    }
-
-    private static FakeDragon addDragon(Player player, Location loc, String message) {
-        FakeDragon dragon = Util.newDragon(message, loc.add(0, -300, 0), hasNew(player));
-
-        Util.sendPacket(player, dragon.getSpawnPacket(hasNew(player)));
-
-        players.put(player.getUniqueId(), dragon);
-
-        return dragon;
-    }
+	private static BlockFace getDirection(Location loc) {
+		float dir = Math.round(loc.getYaw() / 90);
+		if (dir == -4 || dir == 0 || dir == 4)
+			return BlockFace.SOUTH;
+		if (dir == -1 || dir == 3)
+			return BlockFace.EAST;
+		if (dir == -2 || dir == 2)
+			return BlockFace.NORTH;
+		if (dir == -3 || dir == 1)
+			return BlockFace.WEST;
+		return null;
+	}
 }

@@ -17,11 +17,11 @@ import org.bukkit.Location;
 * @author James Mortemore
 */
 
-public class v1_7 extends FakeDragon {
+public class v1_8Fake extends FakeDragon {
 	private Object dragon;
 	private int id;
 
-	public v1_7(String name, Location loc) {
+	public v1_8Fake(String name, Location loc) {
 		super(name, loc);
 	}
 
@@ -38,7 +38,7 @@ public class v1_7 extends FakeDragon {
 			setLocation.invoke(dragon, getX(), getY(), getZ(), getPitch(), getYaw());
 
 			Method setInvisible = Util.getMethod(EntityEnderDragon, "setInvisible", new Class<?>[] { boolean.class });
-			setInvisible.invoke(dragon, isVisible());
+			setInvisible.invoke(dragon, true);
 
 			Method setCustomName = Util.getMethod(EntityEnderDragon, "setCustomName", new Class<?>[] { String.class });
 			setCustomName.invoke(dragon, name);
@@ -132,11 +132,10 @@ public class v1_7 extends FakeDragon {
 	@Override
 	public Object getTeleportPacket(Location loc) {
 		Class<?> PacketPlayOutEntityTeleport = Util.getCraftClass("PacketPlayOutEntityTeleport");
-
 		Object packet = null;
 
 		try {
-			packet = PacketPlayOutEntityTeleport.getConstructor(new Class<?>[] { int.class, int.class, int.class, int.class, byte.class, byte.class }).newInstance(this.id, loc.getBlockX() * 32, loc.getBlockY() * 32, loc.getBlockZ() * 32, (byte) ((int) loc.getYaw() * 256 / 360), (byte) ((int) loc.getPitch() * 256 / 360));
+			packet = PacketPlayOutEntityTeleport.getConstructor(new Class<?>[] { int.class, int.class, int.class, int.class, byte.class, byte.class, boolean.class, boolean.class }).newInstance(this.id, loc.getBlockX() * 32, loc.getBlockY() * 32, loc.getBlockZ() * 32, (byte) ((int) loc.getYaw() * 256 / 360), (byte) ((int) loc.getPitch() * 256 / 360), false, false);
 		} catch (IllegalArgumentException e) {
 			e.printStackTrace();
 		} catch (SecurityException e) {
@@ -164,31 +163,26 @@ public class v1_7 extends FakeDragon {
 			watcher = DataWatcher.getConstructor(new Class<?>[] { Entity }).newInstance(dragon);
 			Method a = Util.getMethod(DataWatcher, "a", new Class<?>[] { int.class, Object.class });
 
-			a.invoke(watcher, 0, isVisible() ? (byte) 0 : (byte) 0x20);
+			a.invoke(watcher, 5, isVisible() ? (byte) 0 : (byte) 0x20);
 			a.invoke(watcher, 6, (Float) health);
 			a.invoke(watcher, 7, (Integer) 0);
 			a.invoke(watcher, 8, (Byte) (byte) 0);
 			a.invoke(watcher, 10, name);
 			a.invoke(watcher, 11, (Byte) (byte) 1);
 		} catch (IllegalArgumentException e) {
-
 			e.printStackTrace();
 		} catch (SecurityException e) {
-
 			e.printStackTrace();
 		} catch (InstantiationException e) {
-
 			e.printStackTrace();
 		} catch (IllegalAccessException e) {
-
 			e.printStackTrace();
 		} catch (InvocationTargetException e) {
-
 			e.printStackTrace();
 		} catch (NoSuchMethodException e) {
-
 			e.printStackTrace();
 		}
+
 		return watcher;
 	}
 }
