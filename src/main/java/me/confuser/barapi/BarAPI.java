@@ -33,7 +33,7 @@ public class BarAPI extends JavaPlugin implements Listener {
 
 	private static BarAPI plugin;
 	
-	private static boolean useSpigotHack = false;
+	// private static boolean useSpigotHack = false;
 
 	public void onEnable() {
 		getConfig().options().copyDefaults(true);
@@ -69,9 +69,9 @@ public class BarAPI extends JavaPlugin implements Listener {
 			}, 30L, 300L);
 		}
 		
-		useSpigotHack = getConfig().getBoolean("useSpigotHack", false);
-		
-		if (useSpigotHack) {
+//		useSpigotHack = getConfig().getBoolean("useSpigotHack", false);
+//		
+//		if (useSpigotHack) {
 			getServer().getScheduler().scheduleSyncRepeatingTask(this, new Runnable() {
 				public void run() {
 					for (UUID uuid : players.keySet()) {
@@ -80,7 +80,7 @@ public class BarAPI extends JavaPlugin implements Listener {
 					}
 				}
 			}, 0L, 5L);
-		}
+//		}   
 	}
 	
 	public void onDisable() {
@@ -152,9 +152,9 @@ public class BarAPI extends JavaPlugin implements Listener {
 		removeBar(player);
 	}
 	
-	public static boolean useSpigotHack() {
-		return useSpigotHack;
-	}
+//	public static boolean useSpigotHack() {
+//		return useSpigotHack;
+//	}
 	
 	/**
 	 * Set a message for all players.<br>
@@ -458,28 +458,28 @@ public class BarAPI extends JavaPlugin implements Listener {
 	private static Location getDragonLocation(Location loc) {
 	    if(null == loc) return null;
 	    
-		if (!useSpigotHack()) {
-			loc.subtract(0, 300, 0);
+//		if (!useSpigotHack()) {
+	        loc.subtract(0, 300, 0);
 			return loc;
-		}
+//		}
 
-		float pitch = loc.getPitch();
-		
-		if (pitch >= 55) {
-			loc.add(0, -300, 0);
-		} else if (pitch <= -55) {
-			loc.add(0, 300, 0);
-        } else {
-            BlockFace face = getDirection(loc);
-            if (null != face) {
-                Block relative = loc.getBlock().getRelative(face, plugin.getServer().getViewDistance() * 16);
-                if (null != relative) {
-                    loc = relative.getLocation();
-                }
-            }
-        }
-
-		return loc;
+//		float pitch = loc.getPitch();
+//		
+//		if (pitch >= 55) {
+//			loc.add(0, -300, 0);
+//		} else if (pitch <= -55) {
+//			loc.add(0, 300, 0);
+//        } else {
+//            BlockFace face = getDirection(loc);
+//            if (null != face) {
+//                Block relative = loc.getBlock().getRelative(face, plugin.getServer().getViewDistance() * 16);
+//                if (null != relative) {
+//                    loc = relative.getLocation();
+//                }
+//            }
+//        }
+//
+//		return loc;
 	}
 
 	private static BlockFace getDirection(Location loc) {
