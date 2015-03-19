@@ -28,7 +28,7 @@ public class Util {
 	static {
 		if (BarAPI.useSpigotHack()) {
 			fakeDragonClass = v1_8Fake.class;
-			version = "v1_7_R4.";
+			version = "v1_8_R1.";
 		} else {
 			String name = Bukkit.getServer().getClass().getPackage().getName();
 			String mcVersion = name.substring(name.lastIndexOf('.') + 1);

@@ -18,7 +18,7 @@ import org.bukkit.Location;
 */
 
 public class v1_8Fake extends FakeDragon {
-	private Object dragon;
+	private Object wither;
 	private int id;
 
 	public v1_8Fake(String name, Location loc) {
@@ -29,38 +29,39 @@ public class v1_8Fake extends FakeDragon {
 	public Object getSpawnPacket() {
 		Class<?> Entity = Util.getCraftClass("Entity");
 		Class<?> EntityLiving = Util.getCraftClass("EntityLiving");
-		Class<?> EntityEnderDragon = Util.getCraftClass("EntityEnderDragon");
+		//Class<?> EntityEnderDragon = Util.getCraftClass("EntityEnderDragon");
+		Class<?> EntityWither = Util.getCraftClass("EntityWither");
 		Object packet = null;
 		try {
-			dragon = EntityEnderDragon.getConstructor(Util.getCraftClass("World")).newInstance(getWorld());
+			wither = EntityWither.getConstructor(Util.getCraftClass("World")).newInstance(getWorld());
 
-			Method setLocation = Util.getMethod(EntityEnderDragon, "setLocation", new Class<?>[] { double.class, double.class, double.class, float.class, float.class });
-			setLocation.invoke(dragon, getX(), getY(), getZ(), getPitch(), getYaw());
+			Method setLocation = Util.getMethod(EntityWither, "setLocation", new Class<?>[] { double.class, double.class, double.class, float.class, float.class });
+			setLocation.invoke(wither, getX(), getY(), getZ(), getPitch(), getYaw());
 
-			Method setInvisible = Util.getMethod(EntityEnderDragon, "setInvisible", new Class<?>[] { boolean.class });
-			setInvisible.invoke(dragon, true);
+			Method setInvisible = Util.getMethod(EntityWither, "setInvisible", new Class<?>[] { boolean.class });
+			setInvisible.invoke(wither, true);
 
-			Method setCustomName = Util.getMethod(EntityEnderDragon, "setCustomName", new Class<?>[] { String.class });
-			setCustomName.invoke(dragon, name);
+			Method setCustomName = Util.getMethod(EntityWither, "setCustomName", new Class<?>[] { String.class });
+			setCustomName.invoke(wither, name);
 
-			Method setHealth = Util.getMethod(EntityEnderDragon, "setHealth", new Class<?>[] { float.class });
-			setHealth.invoke(dragon, health);
+			Method setHealth = Util.getMethod(EntityWither, "setHealth", new Class<?>[] { float.class });
+			setHealth.invoke(wither, health);
 
 			Field motX = Util.getField(Entity, "motX");
-			motX.set(dragon, getXvel());
+			motX.set(wither, getXvel());
 
 			Field motY = Util.getField(Entity, "motY");
-			motY.set(dragon, getYvel());
+			motY.set(wither, getYvel());
 
 			Field motZ = Util.getField(Entity, "motZ");
-			motZ.set(dragon, getZvel());
+			motZ.set(wither, getZvel());
 
-			Method getId = Util.getMethod(EntityEnderDragon, "getId", new Class<?>[] {});
-			this.id = (Integer) getId.invoke(dragon);
+			Method getId = Util.getMethod(EntityWither, "getId", new Class<?>[] {});
+			this.id = (Integer) getId.invoke(wither);
 
 			Class<?> PacketPlayOutSpawnEntityLiving = Util.getCraftClass("PacketPlayOutSpawnEntityLiving");
 
-			packet = PacketPlayOutSpawnEntityLiving.getConstructor(new Class<?>[] { EntityLiving }).newInstance(dragon);
+			packet = PacketPlayOutSpawnEntityLiving.getConstructor(new Class<?>[] { EntityLiving }).newInstance(wither);
 		} catch (IllegalArgumentException e) {
 			e.printStackTrace();
 		} catch (SecurityException e) {
@@ -160,7 +161,7 @@ public class v1_8Fake extends FakeDragon {
 
 		Object watcher = null;
 		try {
-			watcher = DataWatcher.getConstructor(new Class<?>[] { Entity }).newInstance(dragon);
+			watcher = DataWatcher.getConstructor(new Class<?>[] { Entity }).newInstance(wither);
 			Method a = Util.getMethod(DataWatcher, "a", new Class<?>[] { int.class, Object.class });
 
 			a.invoke(watcher, 5, isVisible() ? (byte) 0 : (byte) 0x20);

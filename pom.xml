@@ -5,7 +5,7 @@
   <description>Allows plugins to control the boss health bar message</description>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <spigot.version>1.7.10-R0.1-SNAPSHOT</spigot.version>
+    <spigot.version>1.8-R0.1-SNAPSHOT</spigot.version>
   </properties>
   <groupId>me.confuser</groupId>
   <artifactId>BarAPI</artifactId>
