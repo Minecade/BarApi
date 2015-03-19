@@ -456,6 +456,8 @@ public class BarAPI extends JavaPlugin implements Listener {
 	}
 	
 	private static Location getDragonLocation(Location loc) {
+	    if(null == loc) return null;
+	    
 		if (!useSpigotHack()) {
 			loc.subtract(0, 300, 0);
 			return loc;
